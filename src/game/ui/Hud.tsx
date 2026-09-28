@@ -253,6 +253,13 @@ export function Hud({ game, snap }: HudProps) {
         </button>
       </div>
 
+      {/* connection dropped — the relay client is reconnecting */}
+      {snap.netStatus === 'reconnecting' && !snap.practice && !snap.freePlay && (
+        <div className="gg-chip gg-breathe absolute top-28 left-1/2 -translate-x-1/2 text-xs font-bold">
+          Connection dropped — reconnecting…
+        </div>
+      )}
+
       {/* spectating chip */}
       {snap.spectating && !snap.paused && (
         <div className="gg-chip gg-breathe absolute top-16 left-1/2 -translate-x-1/2 text-xs font-bold">

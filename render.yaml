@@ -1,18 +1,16 @@
-# Render blueprint — New → Blueprint → select this repo.
-# A static site: free, CDN-served, no cold starts.
+# Render blueprint — one Node web service that serves the game AND runs the
+# multiplayer rooms (WebSocket relay at /ws). Singapore = lowest latency for India.
+# Free plan sleeps after 15 idle minutes; a cron-job.org ping on /health keeps it up.
 services:
   - type: web
-    name: football-bluelock
-    runtime: static
+    name: football-bluelock-live
+    runtime: node
+    region: singapore
+    plan: free
     buildCommand: npm install && npm run build
-    staticPublishPath: ./out
+    startCommand: node server/index.mjs
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
-      # public Supabase values (baked into the client at build time)
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        value: https://fktpjqykfxmcygaurcmu.supabase.co
-      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrdHBqcXlrZnhtY3lnYXVyY211Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1MzkxNzYsImV4cCI6MjEwNjExNTE3Nn0.F-65JMmOC7DmyZJAQp6ewUwENGOOkeWMSzbQgPcNVHQ
-    headers:
-      - path: /_next/static/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
+      - key: NODE_VERSION
+        value: "22"

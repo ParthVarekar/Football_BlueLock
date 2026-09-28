@@ -77,7 +77,7 @@ import {
   type Cyclone,
   type MountainWall,
 } from './sim/supers'
-import { SupabaseNet, isSupabaseConfigured, makeRoomCode, normalizeRoomCode } from './net/supabaseNet'
+import { RelayNet, isNetConfigured, makeRoomCode, normalizeRoomCode } from './net/relayNet'
 import { createLights } from './render/toon'
 import { setOutlineWidth, updateOutlineFrame } from './render/outline'
 import { createGameRenderer, GradePass } from './render/post'
@@ -112,6 +112,8 @@ export interface GameHandle {
 
 const nowSec = (): number => performance.now() / 1000
 const AI_ID = 'ai-defender'
+/** Seconds without a transform before a remote player is treated as gone. */
+const STALE_AFTER = 3
 const UP = new THREE.Vector3(0, 1, 0)
 
 interface RestartState {
@@ -202,7 +204,7 @@ export function createGame(opts: GameOptions): GameHandle {
   let prevHostId: string | null = null
   let myName = loadName()
   let myId = `p-${Math.random().toString(36).slice(2, 10)}`
-  let net: SupabaseNet | null = null
+  let net: RelayNet | null = null
   let netCode = ''
   let netStatus = ''
   let scoreA = 0
@@ -337,7 +339,7 @@ export function createGame(opts: GameOptions): GameHandle {
       screen,
       practice: mode === 'practice',
       freePlay: mode === 'free',
-      netConfigured: isSupabaseConfigured(),
+      netConfigured: isNetConfigured(),
       connected: net !== null && netStatus === 'connected',
       netStatus,
       roomCode: netCode,
@@ -532,8 +534,8 @@ export function createGame(opts: GameOptions): GameHandle {
     if (!r) return null
     const mates = roster.filter((e) => e.team === r.team).sort((a, b) => a.joinedAt - b.joinedAt)
     const i = Math.max(0, mates.findIndex((e) => e.id === id))
-    const spread = clamp((i - (mates.length - 1) / 2) * 5, -13, 13)
-    return r.team === 'A' ? [-(5 + i * 2.6), spread, -Math.PI / 2] : [5 + i * 2.6, spread, Math.PI / 2]
+    const spread = clamp((i - (mates.length - 1) / 2) * 6.5, -18, 18)
+    return r.team === 'A' ? [-(6 + i * 3.8), spread, -Math.PI / 2] : [6 + i * 3.8, spread, Math.PI / 2]
   }
 
   function formationSlots(): Record<string, [number, number, number]> {
@@ -774,7 +776,7 @@ export function createGame(opts: GameOptions): GameHandle {
         if (next.length > NET.maxPlayers) {
           const newest = next.reduce((a, b) => (a.joinedAt >= b.joinedAt ? a : b))
           if (newest.id === myId) {
-            toast('Room is full (6 players).')
+            toast(`Room is full (${NET.maxPlayers} players).`)
             cmd({ type: 'leaveRoom' })
             return
           }
@@ -782,11 +784,14 @@ export function createGame(opts: GameOptions): GameHandle {
 
         const newHost = next[0]?.id ?? null
         if (prevHostId !== null && newHost !== prevHostId && newHost !== null) {
-          if (screen === 'game') {
-            endMatchToLobby()
-            toast('Host left — match ended.')
+          // host migration: the next-oldest player picks the match up where it was
+          const hostName = next[0]?.name ?? 'Someone'
+          if (newHost === myId) {
+            if (screen === 'game') takeOverHosting()
+            toast('Host left — you are hosting now.')
+          } else if (screen === 'game') {
+            toast(`Host left — ${hostName} is hosting now.`)
           }
-          if (newHost === myId) toast('You are the host now.')
         }
         prevHostId = newHost
 
@@ -833,8 +838,11 @@ export function createGame(opts: GameOptions): GameHandle {
       },
       onEvent: (msg: MatchEventMsg) => applyEvent(msg),
       onStatus: (status: string, detail?: string) => {
-        netStatus = status
+        const was = netStatus
+        netStatus = detail === 'reconnecting' ? 'reconnecting' : status
         if (status === 'error') toast(detail ? `Connection error: ${detail}` : 'Connection error.')
+        if (netStatus === 'reconnecting' && was === 'connected') toast('Connection dropped — reconnecting…')
+        if (status === 'connected' && was === 'reconnecting') toast('Reconnected')
         pushUi()
       },
     }
@@ -1053,6 +1061,33 @@ export function createGame(opts: GameOptions): GameHandle {
     localBall.y = ball[1]
     audio.setCrowdLevel(0.45)
     pushUi()
+  }
+
+  /**
+   * I just became host mid-match: adopt the last authoritative ball I had and
+   * restart whatever host timer the old host was running.
+   */
+  function takeOverHosting(): void {
+    if (hostBall) copyBall(localBall, hostBall)
+    hostBall = null
+    hostTimers.length = 0
+    const t = nowSec()
+    if (phase === 'goal' || phase === 'halftime') {
+      hostTimers.push({
+        at: t + 2,
+        fn: () => {
+          if (scoreA >= MATCH.goalsToWin || scoreB >= MATCH.goalsToWin) {
+            const winner: Team | 'draw' = scoreA === scoreB ? 'draw' : scoreA > scoreB ? 'A' : 'B'
+            const v: MatchEventMsg = { type: 'victory', winner, scoreA, scoreB, scorers }
+            net?.sendEvent(v)
+            applyEvent(v)
+          } else beginKickoff()
+        },
+      })
+    } else if (phase === 'restart') {
+      restartStartedAt = t
+    }
+    // 'countdown' resolves through the existing host fallback when it hits zero
   }
 
   function endMatchToLobby(): void {
@@ -1451,6 +1486,7 @@ export function createGame(opts: GameOptions): GameHandle {
       if (!p) continue
       const st = remote.latestStatus(id)?.st ?? 0
       if (st === 2 || st === 5) continue
+      if (remote.age(id, nowSec()) > STALE_AFTER) continue
       const v = remote.latestVel(id)
       bodies.push({ id, x: p.x, z: p.z, vx: v?.vx ?? 0, vz: v?.vz ?? 0 })
     }
@@ -3072,6 +3108,7 @@ export function createGame(opts: GameOptions): GameHandle {
 
   // ------------------------------------------------------------------ loop
   let raf = 0
+  let lastRaf = performance.now()
   let last = performance.now()
   let elapsed = 0
   let crowdLevel = 0.15
@@ -3081,9 +3118,8 @@ export function createGame(opts: GameOptions): GameHandle {
   const tmpVecB = new THREE.Vector3()
   const tmpSize = new THREE.Vector2()
 
-  const frameLoop = (t: number): void => {
-    if (!running) return
-    raf = requestAnimationFrame(frameLoop)
+  /** Advance the fixed-step simulation to real time `t` (ms). Returns the real dt (s). */
+  const simulate = (t: number): number => {
     let realDt = (t - last) / 1000
     last = t
     if (realDt > 0.25) realDt = 0.25 // tab-switch guard
@@ -3103,6 +3139,14 @@ export function createGame(opts: GameOptions): GameHandle {
       steps++
     }
     if (acc > STEP * 2) acc = 0 // fell too far behind — drop the backlog
+    return realDt
+  }
+
+  const frameLoop = (t: number): void => {
+    if (!running) return
+    raf = requestAnimationFrame(frameLoop)
+    lastRaf = performance.now()
+    const realDt = simulate(t)
 
     const vdt = Math.min(0.05, realDt)
     if (screen === 'game' && phase !== 'victory') {
@@ -3149,6 +3193,8 @@ export function createGame(opts: GameOptions): GameHandle {
           vdt,
         )
       } else {
+        // a player we haven't heard from in a while fades out instead of freezing in place
+        rig.group.visible = remote.age(id, nowSec()) <= STALE_AFTER
         const pose = remote.sample(id, nowSec())
         if (pose) rig.apply(pose, vdt)
       }
@@ -3227,10 +3273,28 @@ export function createGame(opts: GameOptions): GameHandle {
 
   raf = requestAnimationFrame(frameLoop)
 
+  // Background tabs stop requestAnimationFrame. In a match that froze the whole
+  // game (a backgrounded HOST stops the ball, clock and restarts for everyone; a
+  // backgrounded player stops sending their position). A Web Worker timer isn't
+  // paused, so while rAF is silent it keeps the simulation + networking ticking
+  // at 30 Hz — rendering waits until the tab is visible again.
+  let bgWorker: Worker | null = null
+  try {
+    const src = 'setInterval(function(){postMessage(0)},33)'
+    bgWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })))
+    bgWorker.onmessage = () => {
+      if (!running) return
+      const now = performance.now()
+      if (now - lastRaf > 150) simulate(now)
+    }
+  } catch {
+    bgWorker = null
+  }
+
   // ------------------------------------------------------------------ commands
   async function connectRoom(code: string): Promise<void> {
-    if (!isSupabaseConfigured()) {
-      toast('Multiplayer needs Supabase keys — add them below or in .env.local. Practice works offline!')
+    if (!isNetConfigured()) {
+      toast('Multiplayer is unavailable here. Practice works offline!')
       return
     }
     audio.unlock().catch(() => undefined)
@@ -3239,7 +3303,7 @@ export function createGame(opts: GameOptions): GameHandle {
     netCode = code
     pushUi()
     try {
-      const client = new SupabaseNet(makeNetHandlers())
+      const client = new RelayNet(makeNetHandlers())
       await client.connect(code, { id: client.myId, name: myName, team: 'A', joinedAt: Date.now() })
       net = client
       myId = client.myId
@@ -3501,6 +3565,7 @@ export function createGame(opts: GameOptions): GameHandle {
     dispose(): void {
       running = false
       cancelAnimationFrame(raf)
+      bgWorker?.terminate()
       ro.disconnect()
       input.dispose()
       net?.disconnect()
@@ -3549,6 +3614,15 @@ export function createGame(opts: GameOptions): GameHandle {
       },
       get settings() {
         return { ...settings }
+      },
+      get net() {
+        const t = nowSec()
+        const remotes: Record<string, { x: number; z: number; age: number; st: number }> = {}
+        for (const id of remote.ids()) {
+          const p = remote.latest(id)
+          if (p) remotes[id] = { x: p.x, z: p.z, age: remote.age(id, t), st: remote.latestStatus(id)?.st ?? 0 }
+        }
+        return { myId, status: netStatus, code: netCode, isHost: isHost(), roster: roster.map((r) => ({ id: r.id, name: r.name, team: r.team })), remotes }
       },
     }
   }

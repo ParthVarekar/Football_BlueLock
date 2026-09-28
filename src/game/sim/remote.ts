@@ -164,6 +164,14 @@ export class RemotePlayers {
     return { slideT: s.slideT, kickT: s.kickT }
   }
 
+  /** Seconds since the last transform arrived (Infinity if never). */
+  age(id: string, now: number): number {
+    const e = this.map.get(id)
+    if (!e || e.samples.length === 0) return Infinity
+    const s = e.samples[e.samples.length - 1]
+    return s.seq === -1 ? 0 : now - s.t
+  }
+
   /** Latest self-reported super status (sealed / knocked / frozen / cyclone / glide). */
   latestStatus(id: string): { st: number; stT: number } | null {
     const e = this.map.get(id)

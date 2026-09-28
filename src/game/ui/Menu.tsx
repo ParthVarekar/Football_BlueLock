@@ -147,11 +147,8 @@ export function SettingsBlock({ game, snap }: ScreenProps) {
 function EnvOnlyNote() {
   return (
     <p className="mt-2.5 rounded-xl border-2 border-dashed border-[#2f2823]/25 bg-[#2f2823]/5 px-3 py-2 text-center text-[11px] leading-relaxed font-semibold opacity-75">
-      Online rooms need Supabase keys set as environment variables in{' '}
-      <code className="rounded bg-[#2f2823]/10 px-1">.env.local</code> (
-      <code className="rounded bg-[#2f2823]/10 px-1">NEXT_PUBLIC_SUPABASE_URL</code> +{' '}
-      <code className="rounded bg-[#2f2823]/10 px-1">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — see
-      README). Practice &amp; free play work fully offline.
+      Online rooms need the game server (run <code className="rounded bg-[#2f2823]/10 px-1">startup.bat</code>{' '}
+      locally). Practice &amp; free play work fully offline.
     </p>
   )
 }
@@ -274,7 +271,7 @@ export function MenuScreen({ game, snap }: ScreenProps) {
           )}
 
           <p className="mt-3 text-center text-[11px] leading-relaxed font-semibold opacity-60">
-            2–6 players · 3v3 is the sweet spot
+            2–10 players · 4v4 is the sweet spot
             <br />
             first to 5 goals, or two 3-minute halves
           </p>
@@ -403,7 +400,7 @@ export function RoomScreen({ game, snap }: ScreenProps) {
           <span className={`h-2.5 w-2.5 rounded-full ${snap.connected ? 'bg-[#3d9a4e]' : 'bg-[#d9a13d] gg-breathe'}`} />
           {snap.connected ? 'connected' : 'connecting…'}
           <span className="opacity-40">·</span>
-          <Users size={13} /> {snap.roster.length}/6 players
+          <Users size={13} /> {snap.roster.length}/10 players
         </div>
 
         <div className="mt-4 flex gap-3">

@@ -5,9 +5,9 @@
 
 /** Pitch geometry. Length runs along X, width along Z. */
 export const PITCH = {
-  L: 55,
-  W: 35,
-  cornerR: 6,
+  L: 72,
+  W: 46,
+  cornerR: 7,
   /** Wall stands this far outside the touchline (rounded rect). */
   wallMargin: 4.5,
   get halfL() { return this.L / 2 },
@@ -19,7 +19,7 @@ export const PITCH = {
 
 /** Goals sit in the short ends. Team A defends x = -halfL, Team B defends x = +halfL. */
 export const GOAL = {
-  halfW: 1.5, // 3 m wide mouth
+  halfW: 1.9, // 3.8 m wide mouth (5v5-sized pitch)
   height: 2.0,
   depth: 1.9, // net box depth behind the line
   postR: 0.065,
@@ -279,7 +279,7 @@ export const NET = {
   playerHz: 20,
   ballHz: 15,
   interpDelay: 0.12, // remote player interpolation buffer
-  maxPlayers: 6,
+  maxPlayers: 10,
   codeChars: 'ABCDEFGHJKMNPQRSTUVWXYZ23456789',
 } as const
 
@@ -295,13 +295,13 @@ export const MATCH = {
 /** Lawn-tennis-ball sized pitch furniture, real-rules edition (scaled to 55×35). */
 export const RULES = {
   /** Penalty area depth from the goal line + half width. */
-  boxDepth: 10,
-  boxHalfW: 11,
+  boxDepth: 13,
+  boxHalfW: 14,
   /** Six-yard (goal) area. */
-  goalAreaDepth: 3.5,
-  goalAreaHalfW: 4.75,
+  goalAreaDepth: 4.5,
+  goalAreaHalfW: 6,
   /** Penalty spot distance from the goal line. */
-  penaltySpot: 7,
+  penaltySpot: 9,
   /** Opponents pushed this far from a free-kick / corner spot at setup. */
   freeKickRadius: 3.4,
   /** Thrower must keep this far outside the touchline. */
@@ -356,7 +356,7 @@ export const NAME_POOL = [
   'Arjun', 'Zoya', 'Rohan', 'Meera', 'Kabir', 'Tara', 'Dev', 'Ananya', 'Ishaan', 'Priya', 'Sam', 'Riya',
 ] as const
 
-export const ROOM_FULL_MSG = 'Room is full (6 players).'
+export const ROOM_FULL_MSG = 'Room is full (10 players).'
 
 /** Skin tones for procedural players. */
 export const SKIN_TONES = ['#c68958', '#a9703f', '#8a5a30', '#e0a878'] as const

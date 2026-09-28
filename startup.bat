@@ -26,6 +26,12 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":3000 .*LISTENING"') d
   taskkill /PID %%p /T /F >nul 2>nul
 )
 
+rem free port 3001 too, then start the multiplayer relay in its own window
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":3001 .*LISTENING"') do (
+  taskkill /PID %%p /T /F >nul 2>nul
+)
+start "Gulmohar Ground - multiplayer relay" cmd /c "node server\index.mjs"
+
 rem open the game in the browser once the server has had a moment to boot
 start "" cmd /c "timeout /t 8 /nobreak >nul & start http://localhost:3000"
 

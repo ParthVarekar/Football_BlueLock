@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Gulmohar Ground — First Person",
   description:
-    "First-person gully football at golden hour. Grab up to six friends, share a room code, and play 3v3 on a hand-painted Indian maidan.",
+    "First-person gully football at golden hour. Grab up to nine friends, share a room code, and play 4v4 or 5v5 on a hand-painted Indian maidan.",
   keywords: ["football", "gully football", "multiplayer", "three.js", "first person", "browser game"],
   authors: [{ name: "Gulmohar Ground" }],
 };

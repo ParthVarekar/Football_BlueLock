@@ -139,10 +139,10 @@ export function createLights(scene: THREE.Scene, quality: Quality): LightRig {
   const shadowSize = QUALITY[quality].shadowMap
   sun.shadow.mapSize.set(shadowSize, shadowSize)
   const cam = sun.shadow.camera
-  cam.left = -46
-  cam.right = 46
-  cam.top = 34
-  cam.bottom = -34
+  cam.left = -58
+  cam.right = 58
+  cam.top = 42
+  cam.bottom = -42
   cam.near = 10
   cam.far = 240
   sun.shadow.bias = -0.0004

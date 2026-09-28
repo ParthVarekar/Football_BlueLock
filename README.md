@@ -3,7 +3,7 @@
 **First-person gully football at golden hour.** Every friend is a footballer on the
 pitch, seeing the match through their own eyes: dribble, sprint, use skill moves,
 and kick the ball wherever you're looking — to pass, to cross, or to score.
-2–6 players (3v3 is the sweet spot), two teams, on a hand-painted Indian maidan
+2–10 players (4v4 is the sweet spot), two teams, on a hand-painted Indian maidan
 rendered like an anime background painting — now with **Blue Lock–style EGO
 super moves**.
 
@@ -26,28 +26,22 @@ Open **http://localhost:3000**.
 - **Practice alone** works immediately and offline — with the AI defender, or
   in **Free play** with nobody else on the pitch —
   no configuration needed.
-- **Multiplayer rooms** need Supabase keys (2-minute setup below).
+- **Multiplayer rooms** run through the bundled relay server (`startup.bat` starts it, or `npm run relay`).
 
-## 2-minute Supabase setup (multiplayer)
+## Multiplayer server
 
-The game uses **Supabase Realtime** (broadcast + presence) as its network layer.
-There is **zero server code** and **no database setup** — realtime channels need
-no tables and no RLS policies.
+Rooms run on a tiny Node relay (`server/index.mjs`, WebSocket at `/ws`). It
+owns the rooms (roster, host = oldest player, team balance, the 10-player cap,
+dropping dead connections) and relays each client's messages to the rest of the
+room. Game authority stays in the host's browser: ball, score, clock, rules.
 
-**Setup — env vars only** (keys are never typed into the game):
+- **Local:** `startup.bat` starts the relay on :3001 next to `next dev` on :3000.
+- **Production:** the same process also serves the static build (`out/`) and
+  answers `GET /health`.
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Open **Project Settings → API**.
-3. Copy **Project URL** and the **anon public** key.
-4. `.env.local` is already scaffolded in the repo root — uncomment and fill in
-   the two lines (or `cp .env.example .env.local`):
-
-```bash
-# NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-# NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-```
-
-5. Restart `bun run dev`, click **Create a room**, and share the 4-letter code.
+Connections reconnect automatically; if the host leaves, the next-oldest player
+takes over hosting and the match carries on. Background tabs keep simulating,
+so alt-tabbing never freezes a match.
 
 ## EGO super moves
 
@@ -79,21 +73,18 @@ Zero Hour (the caster owns the ball while time stands still).
 
 ## Hosting online
 
-The site is a plain Next.js app; multiplayer traffic goes straight from each
-browser to Supabase, so any static-friendly host works. This repo ships a
-`render.yaml` blueprint for [Render](https://render.com):
+`render.yaml` is a [Render](https://render.com) blueprint for one Node web
+service (Singapore region) that serves the game and runs the rooms:
 
-1. Render → **New → Blueprint** → pick this repo.
-2. The Supabase URL + anon key are already in `render.yaml` (swap them for your own project).
-3. Deploy, then share the `onrender.com` link.
-
-For the lowest in-match latency, keep your Supabase project in the region
-closest to your players.
+1. Render → **New → Blueprint** → pick this repo → **Deploy**.
+2. Free services sleep after 15 idle minutes, so point a
+   [cron-job.org](https://console.cron-job.org) job at
+   `https://<your-service>.onrender.com/health` every 10 minutes.
 
 ## Playing with friends
 
 1. One player creates a room and shares the **4-character code**.
-2. Everyone else joins with the code (2–6 players; the 7th is turned away).
+2. Everyone else joins with the code (2–10 players; the 11th is turned away).
 3. The **first player in the room is HOST** — they can shuffle teams, move
    players between Saffron and Teal, and start the match.
 4. Late joiners receive a full state snapshot and spectate until the next kickoff.
@@ -173,27 +164,13 @@ whistles. The compound wall keeps every ball in play, goals still count (and
 still celebrate), and the session timer runs as long as you like. Press **R**
 to call the ball back to your feet.
 
-## Deploy to Vercel
-
-1. Push this repo to GitHub/GitLab and **Import Project** in Vercel
-   (framework auto-detects as Next.js — no config needed).
-2. Add the two environment variables for **Production** (and Preview):
-   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-3. Deploy. That's it — the app is fully client-side; there is no server
-   runtime, no database, no websockets of our own.
-
-> Porting note: the game engine lives in `src/game/` and is framework-agnostic
-> (Three.js + a thin React shell). The original spec targeted a Vite static
-> site; this repo hosts the identical game as a client-rendered Next.js page,
-> which also deploys to Vercel with zero config. Moving `src/game/**` into a
-> Vite scaffold works as-is.
 
 ## Architecture
 
 ```
 src/game/
 ├── core/        constants, shared types, math, procedural WebAudio engine
-├── net/         Supabase Realtime client (presence roster + broadcast)
+├── net/         WebSocket relay client (rooms, roster, reconnects)
 ├── sim/         input (kb/mouse/touch), local player, ball physics,
 │                remote-player interpolation buffers
 ├── render/      toon BRDF patch, outlines, post grade, world, players,
@@ -252,11 +229,9 @@ src/game/
 
 ## Troubleshooting
 
-- **"Multiplayer needs Supabase keys"** — add the two env vars
-  (`NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`) to
-  `.env.local` and restart the dev server.
-- **Room stays empty when friends join** — double-check the code (4 chars) and
-  that you all use the same Supabase project.
+- **Can't create a room locally** — the relay isn't running; start the game
+  with `startup.bat` (or run `npm run relay` beside `npm run dev`).
+- **Room stays empty when friends join** — double-check the 4-character code.
 - **Can't move after kickoff** — click the pitch once to capture the mouse;
   press Esc to release it.
 - **Supers don't fire** — check the EGO gauge; each move shows how much it
