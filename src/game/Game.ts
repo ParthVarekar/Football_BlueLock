@@ -2594,16 +2594,21 @@ export function createGame(opts: GameOptions): GameHandle {
       const pos = b.id ? posOf(b.id) : { x: b.x, z: b.z }
       if (!pos) continue
       superFx.bolt(pos.x, pos.z, b.seed, simT, cameraRig.camera)
-      audio.playThunder(pos.x, pos.z)
-      particles.dustPuff(pos.x, pos.z, 1.3)
-      particles.grassBurst(pos.x, pos.z, 12, 0, 0, 1.4)
-      const d = Math.hypot(pos.x - player.x, pos.z - player.z)
-      cameraRig.shake(clamp(1.2 - d / 20, 0.2, 1), 0.6)
-      if (b.cast !== lastInkCast) {
-        lastInkCast = b.cast
-        inkFrame(0.06)
-      }
-      manga.sfxAt('バリッ', pos.x, 2.6, pos.z, elapsed, { size: 0.9, color: '#f6d46a' })
+      // the stepped leader crawls down first; the return stroke lands ~0.16 s later
+      const px = pos.x
+      const pz = pos.z
+      const firstOfCast = b.cast !== lastInkCast
+      lastInkCast = b.cast
+      window.setTimeout(() => {
+        audio.playThunder(px, pz)
+        particles.dustPuff(px, pz, 2)
+        particles.grassBurst(px, pz, 26, 0, 0, 2.2)
+        const d = Math.hypot(px - player.x, pz - player.z)
+        cameraRig.shake(clamp(1.6 - d / 22, 0.35, 1.4), 0.8)
+        cameraRig.fovPunch(firstOfCast ? 4 : 2)
+        if (firstOfCast) inkFrame(0.07)
+        manga.sfxAt('ドガァン!!', px, 3, pz, elapsed, { size: 1.05, color: '#f6d46a' })
+      }, 160)
       if (b.id === myId) {
         stopJuggle(false)
         player.action = null

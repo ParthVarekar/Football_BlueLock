@@ -32,7 +32,7 @@ export default function RootLayout({
         { }
         {/* brush lettering for the EGO super cut-ins — subset to the glyphs we draw */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap&text=%20%21-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%E2%80%94%E3%82%A8%E3%82%A9%E3%82%AA%E3%82%AB%E3%82%AC%E3%82%B4%E3%82%B7%E3%82%BF%E3%83%81%E3%83%83%E3%83%89%E3%83%90%E3%83%94%E3%83%A5%E3%83%AA%E3%83%B3%E5%85%A8%E5%88%BB%E5%A3%81%E5%B0%81%E5%B1%B1%E6%97%8B%E6%AD%A2%E7%88%AA%E7%B4%85%E9%96%8B%E9%9B%B7%E9%A2%A8%E9%B7%B2%E9%BE%8D" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Yuji+Syuku&display=swap&text=%E3%82%A1%20%21-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%E2%80%94%E3%82%A8%E3%82%A9%E3%82%AA%E3%82%AB%E3%82%AC%E3%82%B4%E3%82%B7%E3%82%BF%E3%83%81%E3%83%83%E3%83%89%E3%83%90%E3%83%94%E3%83%A5%E3%83%AA%E3%83%B3%E5%85%A8%E5%88%BB%E5%A3%81%E5%B0%81%E5%B1%B1%E6%97%8B%E6%AD%A2%E7%88%AA%E7%B4%85%E9%96%8B%E9%9B%B7%E9%A2%A8%E9%B7%B2%E9%BE%8D" rel="stylesheet" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Karla:wght@400;600;700;800&display=swap"

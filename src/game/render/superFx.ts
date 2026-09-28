@@ -254,9 +254,23 @@ interface EagleState {
 // ------------------------------------------------------------------ bolts
 
 interface Bolt {
-  group: THREE.Group
+  /** Main strike: two alternate channel shapes the restrikes flick between. */
+  strikeA: THREE.Group
+  strikeB: THREE.Group
+  /** Stepped leaders crawling down before the return stroke (drawRange reveal). */
+  leaders: THREE.Mesh[]
+  pillar: THREE.Mesh | null
+  shock: THREE.Mesh | null
+  arcs: THREE.Group | null
+  lastArc: number
   born: number
-  life: number
+  /** Seconds of leader crawl before the strike lands. */
+  lead: number
+  big: boolean
+  x: number
+  z: number
+  seed: number
+  toCam: THREE.Vector3
   scorch: THREE.Mesh | null
 }
 
@@ -978,41 +992,196 @@ export class SuperFx {
 
   // ================================================================== THUNDER
 
-  /** A lightning bolt from the storm to (x, z): ink ribbon, paper core, branches, scorch. */
+  /**
+   * Thunder Seal strike — staged like a real return stroke, drawn in ink:
+   *  1. stepped leaders crawl down from the storm ceiling (~0.16 s)
+   *  2. the return stroke SLAMS in: a thick ink channel, gold rim, white-hot
+   *     core, a crown of forks, and a pale light pillar round the target
+   *  3. two restrikes flick the channel to a new shape
+   *  4. the ground takes it: shockwave ring, crawling ground arcs, a scorch
+   */
   bolt(x: number, z: number, seed: number, now: number, camera: THREE.Camera, scale = 1): void {
+    const big = scale >= 0.99
     const r = makeRng(seed)
-    const group = new THREE.Group()
-    group.renderOrder = 8
-    const top = new THREE.Vector3(x + (r() - 0.5) * 6, 26 * scale, z + (r() - 0.5) * 6)
+    const toCam = new THREE.Vector3().subVectors(camera.position, new THREE.Vector3(x, 0, z)).setY(0).normalize()
+    const topY = 58 * scale
+    const top = new THREE.Vector3(x + (r() - 0.5) * 10, topY, z + (r() - 0.5) * 10)
     const bottom = new THREE.Vector3(x, 0.05, z)
-    const pts = this.jagged(top, bottom, 7, 2.2 * scale, r)
-    const toCam = new THREE.Vector3().subVectors(camera.position, bottom).setY(0).normalize()
-    group.add(this.ribbon(pts, 0.55 * scale, 'boltInk', toCam))
-    group.add(this.ribbon(pts, 0.2 * scale, 'boltCore', toCam, 0.02))
-    // forks
-    for (let b = 0; b < 3; b++) {
-      const i = 2 + Math.floor(r() * (pts.length - 4))
-      const from = pts[i]
-      const to = from.clone().add(new THREE.Vector3((r() - 0.5) * 7, -4 - r() * 5, (r() - 0.5) * 7))
-      const fork = this.jagged(from, to, 4, 1.2 * scale, r)
-      group.add(this.ribbon(fork, 0.3 * scale, 'boltInk', toCam))
-      group.add(this.ribbon(fork, 0.1 * scale, 'boltCore', toCam, 0.02))
+
+    const channel = (rs: () => number): THREE.Group => {
+      const g = new THREE.Group()
+      g.renderOrder = 8
+      // many small, violent kinks read as real lightning (few big ones read as a cartoon zigzag)
+      const main = this.jagged(top, bottom, 9, 9 * scale, rs, 0.62)
+      // nested layers: thin ink edge, gold rim, white-hot core
+      g.add(this.ribbon(main, 0.62 * scale, 'boltInk', toCam))
+      g.add(this.ribbon(main, 0.36 * scale, 'boltGold', toCam, 0.03))
+      g.add(this.ribbon(main, 0.16 * scale, 'boltCore', toCam, 0.06))
+      // a crown of forks, some splitting again
+      const forks = big ? 7 : 2
+      for (let b = 0; b < forks; b++) {
+        const i = 3 + Math.floor(rs() * (main.length * 0.75))
+        const from = main[Math.min(main.length - 2, i)]
+        const len = (6 + rs() * 12) * scale
+        const to = from.clone().add(new THREE.Vector3((rs() - 0.5) * len * 1.4, -len * (0.5 + rs() * 0.6), (rs() - 0.5) * len * 1.4))
+        to.y = Math.max(0.3, to.y)
+        const fork = this.jagged(from, to, 6, 4 * scale, rs, 0.62)
+        g.add(this.ribbon(fork, 0.3 * scale, 'boltInk', toCam))
+        g.add(this.ribbon(fork, 0.1 * scale, 'boltCore', toCam, 0.03))
+        if (rs() < 0.5) {
+          const j = Math.floor(fork.length * (0.3 + rs() * 0.4))
+          const twig = this.jagged(fork[j], fork[j].clone().add(new THREE.Vector3((rs() - 0.5) * 5, -2 - rs() * 4, (rs() - 0.5) * 5)), 4, 1.8 * scale, rs, 0.62)
+          g.add(this.ribbon(twig, 0.18 * scale, 'boltInk', toCam))
+          g.add(this.ribbon(twig, 0.06 * scale, 'boltCore', toCam, 0.02))
+        }
+      }
+      g.visible = false
+      this.scene.add(g)
+      return g
     }
-    this.scene.add(group)
+    const strikeA = channel(r)
+    const strikeB = channel(makeRng(seed ^ 0x5bd1e995))
+
+    // stepped leaders: thin tendrils feeling their way down
+    const leaders: THREE.Mesh[] = []
+    if (big) {
+      for (let l = 0; l < 4; l++) {
+        const end = new THREE.Vector3(x + (r() - 0.5) * 9, 2 + r() * 10, z + (r() - 0.5) * 9)
+        const path = this.jagged(top, l === 0 ? bottom : end, 6, 4, r)
+        const m = this.ribbon(path, 0.18, l === 0 ? 'boltGold' : 'boltInk', toCam)
+        m.geometry.setDrawRange(0, 0)
+        m.renderOrder = 8
+        this.scene.add(m)
+        leaders.push(m)
+      }
+    }
+
+    let pillar: THREE.Mesh | null = null
+    let shock: THREE.Mesh | null = null
     let scorch: THREE.Mesh | null = null
-    if (scale >= 0.99) {
-      const mat = new THREE.MeshBasicMaterial({ map: this.scorchTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 })
+    if (big) {
+      // a painted column of light round the target (flat colour, fades — no bloom)
+      const pm = new THREE.MeshBasicMaterial({ color: '#fff1c4', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })
+      pillar = new THREE.Mesh(this.sg('pillar', () => new THREE.CylinderGeometry(1, 1.35, 1, 20, 1, true).translate(0, 0.5, 0)), pm)
+      pillar.position.set(x, 0, z)
+      pillar.scale.set(0.55, 30, 0.55)
+      pillar.renderOrder = 7
+      this.scene.add(pillar)
+      // shockwave: an ink ring racing out across the turf
+      const sm = new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 })
+      shock = new THREE.Mesh(this.sg('shockRing', () => new THREE.RingGeometry(0.86, 1, 48)), sm)
+      shock.rotation.x = -Math.PI / 2
+      shock.position.set(x, 0.05, z)
+      this.scene.add(shock)
+      const mat = new THREE.MeshBasicMaterial({ map: this.scorchTex, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 })
       scorch = new THREE.Mesh(this.sg('plane', () => new THREE.PlaneGeometry(1, 1)), mat)
-      scorch.scale.setScalar(3.2)
+      scorch.scale.setScalar(5.2)
       scorch.rotation.x = -Math.PI / 2
       scorch.rotation.z = r() * Math.PI * 2
       scorch.position.set(x, 0.03, z)
       this.scene.add(scorch)
     }
-    this.bolts.push({ group, born: now, life: scale >= 0.99 ? 0.42 : 0.12, scorch })
+    this.bolts.push({
+      strikeA,
+      strikeB,
+      leaders,
+      pillar,
+      shock,
+      arcs: big ? new THREE.Group() : null,
+      lastArc: 0,
+      born: now,
+      lead: big ? 0.16 : 0,
+      big,
+      x,
+      z,
+      seed,
+      toCam,
+      scorch,
+    })
   }
 
-  private jagged(a: THREE.Vector3, b: THREE.Vector3, depth: number, spread: number, r: () => number): THREE.Vector3[] {
+  /** Per-frame bolt choreography; returns false when the bolt is finished. */
+  private updateBolt(b: Bolt, now: number): boolean {
+    const t = now - b.born
+    // 1 · leaders crawl down
+    const lead = b.lead > 0 ? Math.min(1, t / b.lead) : 1
+    for (const m of b.leaders) {
+      const count = m.geometry.index ? m.geometry.index.count : 0
+      m.geometry.setDrawRange(0, Math.floor((count * lead) / 6) * 6)
+      m.visible = t < b.lead + 0.05
+    }
+    // 2 · strike + restrikes: A on, gap, B on, gap, A on, then gone
+    const s = t - b.lead
+    const on = (a0: number, a1: number): boolean => s >= a0 && s < a1
+    b.strikeA.visible = on(0, 0.14) || on(0.26, 0.36) || (b.big && on(0.5, 0.66))
+    b.strikeB.visible = on(0.17, 0.24) || (b.big && on(0.4, 0.47))
+    if (!b.big) {
+      b.strikeA.visible = on(0, 0.12)
+      b.strikeB.visible = false
+    }
+    // 3 · light pillar flares on each stroke, then settles out
+    if (b.pillar) {
+      const pm = b.pillar.material as THREE.MeshBasicMaterial
+      const flare = b.strikeA.visible || b.strikeB.visible ? 0.28 : Math.max(0, 0.16 - (s - 0.66) * 0.6)
+      pm.opacity = s >= 0 ? flare : 0
+      b.pillar.visible = s >= 0 && pm.opacity > 0.01
+    }
+    // 4 · shockwave across the turf
+    if (b.shock) {
+      const sm = b.shock.material as THREE.MeshBasicMaterial
+      const k = Math.max(0, s) / 0.55
+      b.shock.visible = s >= 0 && k < 1
+      b.shock.scale.setScalar(0.5 + 10 * (1 - Math.pow(1 - Math.min(1, k), 3)))
+      sm.opacity = 0.85 * (1 - k)
+    }
+    if (b.scorch) {
+      const mat = b.scorch.material as THREE.MeshBasicMaterial
+      mat.opacity = s < 0 ? 0 : Math.max(0, 1 - Math.max(0, s - 1.6) / 1.4)
+    }
+    // ground arcs crackle outward for a moment after the hit
+    if (b.arcs) {
+      if (s >= 0 && s < 0.9 && now - b.lastArc > 0.06) {
+        b.lastArc = now
+        for (const c of [...b.arcs.children]) {
+          b.arcs.remove(c)
+          ;(c as THREE.Mesh).geometry.dispose()
+        }
+        if (!b.arcs.parent) this.scene.add(b.arcs)
+        const r = makeRng(b.seed + Math.floor(now * 1000))
+        const reach = 1.5 + Math.min(1, s / 0.4) * 3.5
+        for (let a = 0; a < 5; a++) {
+          const ang = r() * Math.PI * 2
+          const p0 = new THREE.Vector3(b.x + Math.cos(ang) * 0.4, 0.08, b.z + Math.sin(ang) * 0.4)
+          const p1 = new THREE.Vector3(b.x + Math.cos(ang) * reach * (0.6 + r() * 0.4), 0.08 + r() * 0.3, b.z + Math.sin(ang) * reach * (0.6 + r() * 0.4))
+          const pts = this.jagged(p0, p1, 4, 0.9, r)
+          b.arcs.add(this.ribbon(pts, 0.12, 'boltInk', b.toCam))
+          b.arcs.add(this.ribbon(pts, 0.05, 'boltGold', b.toCam, 0.02))
+        }
+      } else if (s >= 0.9 && b.arcs.parent) {
+        this.scene.remove(b.arcs)
+      }
+    }
+    return t < b.lead + 3.2
+  }
+
+  private disposeBolt(b: Bolt): void {
+    for (const g of [b.strikeA, b.strikeB, b.arcs]) {
+      if (!g) continue
+      this.scene.remove(g)
+      for (const c of g.children) (c as THREE.Mesh).geometry.dispose()
+    }
+    for (const m of b.leaders) {
+      this.scene.remove(m)
+      m.geometry.dispose()
+    }
+    for (const m of [b.pillar, b.shock, b.scorch]) {
+      if (!m) continue
+      this.scene.remove(m)
+      ;(m.material as THREE.Material).dispose()
+    }
+  }
+
+  private jagged(a: THREE.Vector3, b: THREE.Vector3, depth: number, spread: number, r: () => number, falloff = 0.55): THREE.Vector3[] {
     let pts = [a.clone(), b.clone()]
     let amp = spread
     for (let d = 0; d < depth; d++) {
@@ -1025,8 +1194,8 @@ export class SuperFx {
       }
       next.push(pts[pts.length - 1])
       pts = next
-      amp *= 0.55
-      if (pts.length > 70) break
+      amp *= falloff
+      if (pts.length > 260) break
     }
     return pts
   }
@@ -1261,24 +1430,11 @@ export class SuperFx {
         e.fade = 0
       }
     }
-    // bolts flicker, then leave a fading scorch
+    // bolts: leader crawl → strike + restrikes → shockwave, ground arcs, scorch
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       const b = this.bolts[i]
-      const t = now - b.born
-      b.group.visible = t < b.life && !(t > 0.07 && t < 0.11)
-      if (t > b.life && b.group.parent) {
-        this.scene.remove(b.group)
-        for (const c of b.group.children) (c as THREE.Mesh).geometry.dispose()
-      }
-      if (b.scorch) {
-        const mat = b.scorch.material as THREE.MeshBasicMaterial
-        mat.opacity = Math.max(0, 1 - Math.max(0, t - 1.2) / 1.2)
-      }
-      if (t > 2.6) {
-        if (b.scorch) {
-          this.scene.remove(b.scorch)
-          ;(b.scorch.material as THREE.Material).dispose()
-        }
+      if (!this.updateBolt(b, now)) {
+        this.disposeBolt(b)
         this.bolts.splice(i, 1)
       }
     }
@@ -1296,10 +1452,7 @@ export class SuperFx {
       this.scene.remove(e.root)
       this.eagles.delete(key)
     }
-    for (const b of this.bolts) {
-      this.scene.remove(b.group)
-      if (b.scorch) this.scene.remove(b.scorch)
-    }
+    for (const b of this.bolts) this.disposeBolt(b)
     this.bolts = []
     this.setSeals([], 0, new THREE.PerspectiveCamera())
     this.syncCyclones([], 0, 0)

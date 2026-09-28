@@ -241,9 +241,10 @@ export const SUPER = {
   thunder: {
     cost: 70,
     range: 26,
-    windup: 0.38,
+    /** The storm gathers (and the cut-in clears) before the first strike lands. */
+    windup: 0.8,
     seal: 3.2,
-    storm: 1.8,
+    storm: 2.4,
   },
   timeStop: {
     cost: 100,
