@@ -1,16 +1,20 @@
-# Gulmohar Ground — First Person ⚽
+# Football BlueLock — Gulmohar Ground ⚽
 
 **First-person gully football at golden hour.** Every friend is a footballer on the
 pitch, seeing the match through their own eyes: dribble, sprint, use skill moves,
 and kick the ball wherever you're looking — to pass, to cross, or to score.
 2–6 players (3v3 is the sweet spot), two teams, on a hand-painted Indian maidan
-rendered like an anime background painting.
+rendered like an anime background painting — now with **Blue Lock–style EGO
+super moves**.
 
-![pitch](public/logo.svg)
+![Mountain Bastion rising on the maidan](docs/gameplay.png)
 
 ---
 
 ## Quick start (local)
+
+On Windows just double-click **`startup.bat`** — it installs dependencies on the
+first run, frees port 3000 and opens the game in your browser. Or by hand:
 
 ```bash
 bun install        # or npm install
@@ -44,6 +48,47 @@ no tables and no RLS policies.
 ```
 
 5. Restart `bun run dev`, click **Create a room**, and share the 4-letter code.
+
+## EGO super moves
+
+![The six supers](docs/supers.png)
+
+Play fills your **EGO gauge** (bottom-left): time on the ball, flair skills,
+shots, clean tackles and goals. Spend it on keys **1–6** (or the chips on the
+gauge on touch screens). In **Free play** supers cost nothing — a sandbox.
+
+| Key | Super | EGO | What happens |
+|---|---|---|---|
+| **1** | 紅龍 **Crimson Dragon** | 100 | A serpent dragon coils round the ball and carries it into the net. Unblockable — anyone in its path is bowled over. |
+| **2** | 山壁 **Mountain Bastion** | 50 | A ridge of rock peaks erupts where you look. Blocks the ball and players; anyone on the spot is launched. |
+| **3** | 鷲爪 **Eagle Talon** | 60 | A spirit eagle swoops you onto the ball from anywhere; whoever had it is knocked flat. |
+| **4** | 雷封 **Thunder Seal** | 70 | Storm sky; lightning roots every nearby rival in place, sealed by paper talismans. |
+| **5** | 刻止 **Zero Hour** | 100 | Time stops for everyone else. A ball you kick hangs in the air until time resumes. |
+| **6** | 旋風 **Gulmohar Cyclone** | 70 | A petal tornado drags rivals together and spins them. |
+
+Every super fires a manga cut-in (the EGO eye flash), focus lines, brush-lettered
+sound effects and an ink impact frame — all drawn as ink on paper to match the
+painted look.
+
+![Zero Hour](docs/zero-hour.png)
+
+Online, a super is one broadcast event: every client plays the move and decides
+for itself whether it was caught. The ball stays host-authoritative except
+during the dragon's flight (a deterministic curve every client follows) and
+Zero Hour (the caster owns the ball while time stands still).
+
+## Hosting online
+
+The site is a plain Next.js app; multiplayer traffic goes straight from each
+browser to Supabase, so any static-friendly host works. This repo ships a
+`render.yaml` blueprint for [Render](https://render.com):
+
+1. Render → **New → Blueprint** → pick this repo.
+2. The Supabase URL + anon key are already in `render.yaml` (swap them for your own project).
+3. Deploy, then share the `onrender.com` link.
+
+For the lowest in-match latency, keep your Supabase project in the region
+closest to your players.
 
 ## Playing with friends
 
@@ -214,8 +259,8 @@ src/game/
   that you all use the same Supabase project.
 - **Can't move after kickoff** — click the pitch once to capture the mouse;
   press Esc to release it.
-- **Sandbox/preview** — use the Preview Panel; the game is fully client-side
-  and works in any modern browser.
+- **Supers don't fire** — check the EGO gauge; each move shows how much it
+  needs. Crimson Dragon needs the ball at your feet.
 
 ---
 

@@ -1,0 +1,18 @@
+# Render blueprint — New → Blueprint → select this repo.
+# A static site: free, CDN-served, no cold starts.
+services:
+  - type: web
+    name: football-bluelock
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./out
+    envVars:
+      # public Supabase values (baked into the client at build time)
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://fktpjqykfxmcygaurcmu.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZrdHBqcXlrZnhtY3lnYXVyY211Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1MzkxNzYsImV4cCI6MjEwNjExNTE3Nn0.F-65JMmOC7DmyZJAQp6ewUwENGOOkeWMSzbQgPcNVHQ
+    headers:
+      - path: /_next/static/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
