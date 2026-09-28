@@ -53,7 +53,7 @@ gauge on touch screens). In **Free play** supers cost nothing — a sandbox.
 
 | Key | Super | EGO | What happens |
 |---|---|---|---|
-| **1** | 紅龍 **Crimson Dragon** | 100 | A serpent dragon coils round the ball and carries it into the net. Unblockable — anyone in its path is bowled over. |
+| **1** | 紅龍 **Crimson Dragon** | 100 | A serpent dragon coils round the ball and carries it wherever your crosshair points. Unblockable — anyone in its path is bowled over. |
 | **2** | 山壁 **Mountain Bastion** | 50 | A ridge of rock peaks erupts where you look. Blocks the ball and players; anyone on the spot is launched. |
 | **3** | 鷲爪 **Eagle Talon** | 60 | A spirit eagle swoops you onto the ball from anywhere; whoever had it is knocked flat. |
 | **4** | 雷封 **Thunder Seal** | 70 | Storm sky; lightning roots every nearby rival in place, sealed by paper talismans. |

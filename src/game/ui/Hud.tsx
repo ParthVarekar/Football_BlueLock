@@ -15,6 +15,16 @@ import { SUPER_STYLE } from '../render/mangaOverlay'
 import { SUPER } from '../core/constants'
 import type { SuperKind } from '../core/types'
 
+/** Short English labels for the gauge chips (the kanji alone is hard to read). */
+const SUPER_SHORT: Record<SuperKind, string> = {
+  1: 'Dragon',
+  2: 'Mountain',
+  3: 'Eagle',
+  4: 'Thunder',
+  5: 'Zero Hour',
+  6: 'Cyclone',
+}
+
 const SUPER_COSTS: Record<SuperKind, number> = {
   1: SUPER.dragon.cost,
   2: SUPER.mountain.cost,
@@ -49,7 +59,7 @@ function EgoGauge({ game, snap }: { game: GameHandle; snap: UiState }) {
             <span key={c} className="absolute inset-y-0 w-px bg-[#2f2823]/45" style={{ left: `${c}%` }} />
           ))}
       </div>
-      <div className="flex gap-1.5">
+      <div className="grid grid-cols-3 gap-1.5">
         {kinds.map((k) => {
           const st = SUPER_STYLE[k]
           const ready = e.ready[k] && e.lock >= 0.999
@@ -65,9 +75,15 @@ function EgoGauge({ game, snap }: { game: GameHandle; snap: UiState }) {
               }}
               aria-label={`${st.name}, costs ${SUPER_COSTS[k]} EGO`}
             >
-              <span className="text-[9px] font-extrabold">{k}</span>
-              <span className="font-brush text-sm leading-none" style={{ color: ready ? '#fbf3e2' : '#2f2823' }}>
+              <span className="text-[10px] font-extrabold">{k}</span>
+              <span className="font-brush text-xs leading-none" style={{ color: ready ? '#fbf3e2' : '#2f2823' }}>
                 {st.kanji}
+              </span>
+              <span
+                className="truncate text-[10px] leading-none font-extrabold tracking-wide"
+                style={{ color: ready ? '#fbf3e2' : '#2f2823' }}
+              >
+                {SUPER_SHORT[k]}
               </span>
             </button>
           )
@@ -134,7 +150,7 @@ function ControlsList() {
     ['G', 'Cruyff turn — fake shot, drag, 180°'],
     ['B', 'backheel — clip it behind you'],
     ['T', 'juggle on/off — LMB volleys it mid-bounce'],
-    ['1', 'EGO: Crimson Dragon — unstoppable shot (ball at your feet)'],
+    ['1', 'EGO: Crimson Dragon — unstoppable shot along your crosshair (ball at your feet)'],
     ['2', 'EGO: Mountain Bastion — a rock wall where you look'],
     ['3', 'EGO: Eagle Talon — swoop onto the ball from anywhere'],
     ['4', 'EGO: Thunder Seal — lightning roots nearby rivals'],

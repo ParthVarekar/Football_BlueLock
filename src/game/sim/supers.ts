@@ -45,37 +45,49 @@ export function attackGoalX(team: Team): number {
 // ---------------------------------------------------------------- dragon
 
 /**
- * The Crimson Dragon's flight: a cubic bezier from the coiled ball to a spot
- * deep in the net. The middle controls swing wide and high so the ball
- * serpentines, and the last leg always runs straight down the goal's axis —
- * the ball enters through the mouth, never the side netting.
+ * The Crimson Dragon's flight: a cubic bezier from the coiled ball out along
+ * the caster's CROSSHAIR (yaw + pitch). The middle controls swing out to one
+ * side and back so the ball serpentines, but it ends where you aimed — it is
+ * an unblockable strike, not a homing goal. The flight is clipped at the
+ * boundary wall, except through a goal mouth (the ball may fly into the net).
  */
 export function dragonPath(
   sx: number,
   sy: number,
   sz: number,
-  team: Team,
+  yaw: number,
+  pitch: number,
   seed: number,
 ): { path: number[]; flight: number } {
   const rng = makeRng(seed)
-  const gx = attackGoalX(team)
-  const s = Math.sign(gx)
-  // target: a corner-ish pocket inside the goal
-  const tz = (rng() < 0.5 ? -1 : 1) * (0.35 + rng() * 0.6)
-  const ty = 0.55 + rng() * 0.9
-  const x3 = gx + s * (GOAL.depth * 0.55)
-  // approach control: straight out in front of the goal mouth
-  const x2 = gx - s * clamp(Math.abs(gx - sx) * 0.3, 3, 9)
-  const z2 = tz * 0.8
-  // launch control: up and swinging out to one side (the serpentine)
+  const fx = -Math.sin(yaw)
+  const fz = -Math.cos(yaw)
+  // march along the aim until the ball would leave the pitch (goal mouths stay open)
+  let dist = 0
+  for (let d = 1; d <= SUPER.dragon.range3d; d += 0.5) {
+    const x = sx + fx * d
+    const z = sz + fz * d
+    const inPitch = Math.abs(x) < PITCH.halfL - 0.4 && Math.abs(z) < PITCH.halfW - 0.4
+    const inMouth = Math.abs(z) < GOAL.halfW - 0.3 && Math.abs(x) < PITCH.halfL + GOAL.depth * 0.6
+    if (!inPitch && !inMouth) break
+    dist = d
+  }
+  dist = Math.max(4, dist)
+  // height follows the crosshair's pitch: look down → skims the turf, look up → soars
+  const ey = clamp(sy + Math.tan(clamp(pitch, -0.6, 0.6)) * dist * 0.5, 0.45, 6)
+  const ex = sx + fx * dist
+  const ez = sz + fz * dist
+  const rx = -fz
+  const rz = fx
   const side = rng() < 0.5 ? -1 : 1
-  const dx = gx - sx
-  const x1 = sx + dx * 0.3
-  const z1 = clamp(sz + side * (3 + rng() * 5), -PITCH.halfW + 2, PITCH.halfW - 2)
-  const y1 = 3.2 + rng() * 2.4
-  const y2 = 1.6 + rng() * 1.4
-  const path = [sx, sy, sz, x1, y1, z1, x2, y2, z2, x3, ty, tz]
-  // arc length estimate for the flight time
+  const swing = Math.min(4, dist * 0.18) * (0.7 + rng() * 0.5)
+  const x1 = sx + fx * dist * 0.33 + rx * side * swing
+  const z1 = sz + fz * dist * 0.33 + rz * side * swing
+  const y1 = Math.max(sy, ey) + 1.2 + rng() * 1.2
+  const x2 = sx + fx * dist * 0.7 - rx * side * swing * 0.6
+  const z2 = sz + fz * dist * 0.7 - rz * side * swing * 0.6
+  const y2 = (y1 + ey) * 0.5
+  const path = [sx, sy, sz, x1, y1, z1, x2, y2, z2, ex, ey, ez]
   let len = 0
   let px = sx
   let py = sy

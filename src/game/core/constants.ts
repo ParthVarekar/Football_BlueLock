@@ -211,6 +211,10 @@ export const SUPER = {
     speed: 24,
     minFlight: 1.0,
     maxFlight: 2.8,
+    /** Max distance the dragon carries the ball along your aim (m). */
+    range3d: 42,
+    /** Speed the ball keeps when the dragon lets go (m/s). */
+    releaseSpeed: 20,
     /** Anyone within this of the flying ball is bowled over. */
     knockRadius: 1.3,
   },

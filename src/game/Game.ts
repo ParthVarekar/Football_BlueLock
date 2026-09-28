@@ -2241,7 +2241,7 @@ export function createGame(opts: GameOptions): GameHandle {
       }
       // the ball coils up in front of you, at chest height
       const [fx, fz] = forwardXZ(cameraRig.yaw)
-      const { path, flight } = dragonPath(player.x + fx * 3.2, 1.25, player.z + fz * 3.2, myTeam(), seed)
+      const { path, flight } = dragonPath(player.x + fx * 3.2, 1.25, player.z + fz * 3.2, cameraRig.yaw, cameraRig.visualPitch, seed)
       msg.path = path.map((v) => Math.round(v * 1000) / 1000)
       msg.flight = Math.round(flight * 1000) / 1000
     } else if (kind === 3) {
@@ -2408,16 +2408,17 @@ export function createGame(opts: GameOptions): GameHandle {
     d.done = true
     superFx.endDragon(d.key, simT)
     if (!scored) return
-    // release deep in the net, still driving goalward (the net swallows it)
+    // the dragon lets go at the end of your aim — the ball rips on with its momentum
+    // (if you aimed at the goal, it's already in the mouth / net)
     bezierTangent(d.path, 1, superTmpT)
     const l = Math.hypot(superTmpT.x, superTmpT.y, superTmpT.z) || 1
-    localBall.vx = (superTmpT.x / l) * 7
-    localBall.vy = 0
-    localBall.vz = (superTmpT.z / l) * 7
-    const goalX = Math.sign(d.path[9]) * PITCH.halfL
+    localBall.vx = (superTmpT.x / l) * SUPER.dragon.releaseSpeed
+    localBall.vy = (superTmpT.y / l) * SUPER.dragon.releaseSpeed * 0.5
+    localBall.vz = (superTmpT.z / l) * SUPER.dragon.releaseSpeed
+    const inNet = Math.abs(localBall.x) > PITCH.halfL && Math.abs(localBall.z) < GOAL.halfW
     audio.playBoom(localBall.x, localBall.z)
     cameraRig.shake(d.from === myId ? 1.3 : 0.8, 1.0)
-    world.wobbleNet(goalX, 1.6)
+    if (inNet) world.wobbleNet(Math.sign(localBall.x) * PITCH.halfL, 1.6)
     particles.petalBurst(localBall.x, 1.1, localBall.z, 42)
     particles.dustPuff(localBall.x, localBall.z, 1.5)
     manga.sfxAt('ドン!!', localBall.x, 2.0, localBall.z, elapsed, { size: 1.35 })
