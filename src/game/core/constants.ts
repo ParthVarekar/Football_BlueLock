@@ -27,6 +27,9 @@ export const GOAL = {
   lineEps: 0.16,
 } as const
 
+/** Height of the goal's back net / rear stanchions (the roof net slopes down to it). */
+export const NET_BACK_H = 1.42
+
 export const BALL = {
   r: 0.19,
   gravity: -20,

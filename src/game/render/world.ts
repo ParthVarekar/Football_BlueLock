@@ -4,7 +4,7 @@
  * city skyline. Built once, animated cheaply, density switchable at runtime.
  */
 import * as THREE from 'three'
-import { GOAL, PALETTE, PITCH, type Quality, QUALITY } from '../core/constants'
+import { GOAL, NET_BACK_H, PALETTE, PITCH, type Quality, QUALITY } from '../core/constants'
 import { makeToonMaterial } from './toon'
 import { addOutline } from './outline'
 import {
@@ -286,9 +286,8 @@ export function createWorld(scene: THREE.Scene, quality: Quality): World {
       g.add(stub)
 
       // rear stanchion
-      const stanchion = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.5, 8), metalMat)
-      stanchion.position.set(x + side * GOAL.depth * 0.92, 0.75, zs * 0.88)
-      stanchion.rotation.x = -side * zs * 0.06
+      const stanchion = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, NET_BACK_H, 8), metalMat)
+      stanchion.position.set(x + side * (GOAL.depth - 0.03), NET_BACK_H / 2, zs * 0.98)
       stanchion.castShadow = true
       g.add(stanchion)
     }
@@ -302,22 +301,39 @@ export function createWorld(scene: THREE.Scene, quality: Quality): World {
     g.add(bar)
     addOutline(bar, { widthPx: q.outlinePx })
 
-    // back net (sagging, bulging)
-    const backGeo = new THREE.PlaneGeometry(GOAL.halfW * 2 + 0.1, postH, 10, 6)
+    // ---- the net box: back net as tall as the rear stanchions, side nets that
+    // taper from the posts down to it, and a roof that slopes DOWN from the
+    // crossbar to the back — every panel meets its neighbours at the edges.
+    // Rope density is the same on every panel (UVs in metres, 3 m per tile).
+    const backH = NET_BACK_H
+    const depth = GOAL.depth
+    const netW = GOAL.halfW * 2
+    const TILE = 3
+    const metreUVs = (geo: THREE.BufferGeometry, w: number, h: number): void => {
+      const uv = geo.getAttribute('uv') as THREE.BufferAttribute
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / TILE, (uv.getY(i) * h) / TILE)
+      uv.needsUpdate = true
+    }
+    /** Local goal space (d = depth behind the line, y up, z across) → world. */
+    const wp = (d: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x + side * d, y, z)
+
+    // back net (bulging away from the pitch, sagging at the bottom)
+    const backGeo = new THREE.PlaneGeometry(netW, backH, 10, 5)
     {
       const pos = backGeo.getAttribute('position') as THREE.BufferAttribute
       for (let i = 0; i < pos.count; i++) {
         const lx = pos.getX(i)
         const ly = pos.getY(i) // -h/2..h/2
         const t = 1 - Math.abs(lx) / GOAL.halfW
-        const drop = (1 - (ly + postH / 2) / postH) * 0.5
-        pos.setZ(i, t * (0.18 + drop * 0.34)) // bulge away from pitch
-        pos.setY(i, ly - t * 0.1 * drop)
+        const drop = (1 - (ly + backH / 2) / backH) * 0.5
+        pos.setZ(i, t * (0.12 + drop * 0.22)) // bulge away from pitch
+        pos.setY(i, ly - t * 0.06 * drop)
       }
       backGeo.computeVertexNormals()
+      metreUVs(backGeo, netW, backH)
     }
     const backNet = new THREE.Mesh(backGeo, netMat)
-    backNet.position.set(x + side * (GOAL.depth - 0.05), postH / 2, 0)
+    backNet.position.set(x + side * (depth - 0.02), backH / 2, 0)
     backNet.rotation.y = side * Math.PI / 2
     backNet.customDepthMaterial = netDepthMat
     backNet.castShadow = true
@@ -325,28 +341,34 @@ export function createWorld(scene: THREE.Scene, quality: Quality): World {
     nets.push({ mesh: backNet, wobble: 0, phase: side })
 
     const backVeil = new THREE.Mesh(backGeo, netVeilMat)
-    backVeil.position.set(x + side * (GOAL.depth - 0.09), postH / 2, 0)
+    backVeil.position.set(x + side * (depth - 0.06), backH / 2, 0)
     backVeil.rotation.y = side * Math.PI / 2
     backVeil.renderOrder = 1
     g.add(backVeil)
 
-    // side nets
-    for (const zs of [-1, 1]) {
-      const sideGeo = new THREE.PlaneGeometry(GOAL.depth, postH, 6, 5)
-      const sn = new THREE.Mesh(sideGeo, netMat)
-      sn.position.set(x + (side * GOAL.depth) / 2, postH / 2 - 0.03, zs * (GOAL.halfW - 0.02))
-      sn.customDepthMaterial = netDepthMat
-      g.add(sn)
+    /** A flat net panel through four world corners (a, b along the top/bottom edge). */
+    const panel = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3): THREE.Mesh => {
+      // a—b top edge, d—c bottom edge
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, d.x, d.y, d.z], 3))
+      const w = a.distanceTo(b)
+      const h = Math.max(a.distanceTo(d), b.distanceTo(c))
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, h / TILE, w / TILE, h / TILE, w / TILE, 0, 0, 0], 2))
+      geo.setIndex([0, 3, 1, 1, 3, 2])
+      geo.computeVertexNormals()
+      const m = new THREE.Mesh(geo, netMat)
+      m.customDepthMaterial = netDepthMat
+      return m
     }
 
-    // roof net sloping back
-    const roofGeo = new THREE.PlaneGeometry(GOAL.halfW * 2 - 0.02, Math.hypot(GOAL.depth, postH - 1.42), 8, 3)
-    const roof = new THREE.Mesh(roofGeo, netMat)
-    roof.rotation.x = -Math.PI / 2 + Math.atan2(postH - 1.42, GOAL.depth) * 0.96
-    roof.rotation.y = side * Math.PI / 2
-    roof.position.set(x + (side * GOAL.depth) / 2, (postH + 1.42) / 2, 0)
-    roof.customDepthMaterial = netDepthMat
-    g.add(roof)
+    // side nets: trapezoids from the post (full height) back to the back net
+    for (const zs of [-1, 1]) {
+      const z = zs * (GOAL.halfW - 0.01)
+      g.add(panel(wp(0.02, postH, z), wp(depth, backH, z), wp(depth, 0, z), wp(0.02, 0, z)))
+    }
+
+    // roof: crossbar → top of the back net
+    g.add(panel(wp(0.02, postH, -GOAL.halfW), wp(0.02, postH, GOAL.halfW), wp(depth, backH, GOAL.halfW), wp(depth, backH, -GOAL.halfW)))
 
     group.add(g)
   }

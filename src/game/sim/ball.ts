@@ -3,7 +3,7 @@
  * client (prediction while dribbling / just kicked). Gravity, bounce, rolling
  * friction, soft player bumps, rounded-wall bounce, posts, goals, net box.
  */
-import { BALL, GOAL, PITCH, PLAYER, RULES, SKILL2 } from '../core/constants'
+import { BALL, GOAL, NET_BACK_H, PITCH, PLAYER, RULES, SKILL2 } from '../core/constants'
 import { forwardXZ, rightXZ, sdRoundedRect } from '../core/math'
 import type { Team } from '../core/types'
 
@@ -125,31 +125,55 @@ export function stepBall(b: BallState, dt: number, players: readonly BallPlayerR
     }
   }
 
-  // net containment (behind either goal line, inside the mouth box)
-  const inNetRegion = Math.abs(b.x) > PITCH.halfL + 0.12 && Math.abs(b.z) < GOAL.halfW + 0.75
-  if (inNetRegion) {
-    // loose nets swallow momentum — the ball dies in the back of the net
-    const swallow = Math.exp(-3.2 * dt)
-    b.vx *= swallow
-    b.vz *= swallow
-    if (b.y <= r + 0.02) b.vy *= Math.exp(-2 * dt)
+  // net box (behind either goal line) — the SAME box the renderer draws: side
+  // nets at ±halfW, back net at depth, roof sloping from the crossbar down to
+  // the back net. A ball inside stays inside; a ball outside bounces off the
+  // outside of the netting instead of being pulled in.
+  const behind = Math.abs(b.x) - PITCH.halfL
+  if (behind > 0 && behind < GOAL.depth + r && Math.abs(b.z) < GOAL.halfW + r + 0.05) {
     const s = Math.sign(b.x)
-    const backX = PITCH.halfL + GOAL.depth - r
-    if (Math.abs(b.x) > backX) {
-      b.x = s * backX
-      b.vx *= -0.1
-      b.vz *= 0.4
+    const d = Math.min(behind, GOAL.depth)
+    const roofY = GOAL.height - (GOAL.height - NET_BACK_H) * (d / GOAL.depth)
+    const inside = Math.abs(b.z) < GOAL.halfW && b.y < roofY + r * 0.5
+    if (inside) {
+      // loose nets swallow momentum — the ball dies in the back of the net
+      const swallow = Math.exp(-3.2 * dt)
+      b.vx *= swallow
+      b.vz *= swallow
+      if (b.y <= r + 0.02) b.vy *= Math.exp(-2 * dt)
+      const backX = PITCH.halfL + GOAL.depth - r
+      if (Math.abs(b.x) > backX) {
+        b.x = s * backX
+        b.vx *= -0.1
+        b.vz *= 0.4
+        ev.netTouch = true
+      }
+      const sideZ = GOAL.halfW - r
+      if (Math.abs(b.z) > sideZ) {
+        b.z = Math.sign(b.z) * sideZ
+        b.vz *= -0.2
+        ev.netTouch = true
+      }
+      if (b.y > roofY - r) {
+        b.y = roofY - r
+        b.vy = Math.min(b.vy, 0)
+        ev.netTouch = true
+      }
+    } else if (b.y < roofY + r) {
+      // outside the netting: a side-net / back-net / roof bounce
+      if (Math.abs(b.z) >= GOAL.halfW) {
+        b.z = Math.sign(b.z) * (GOAL.halfW + r)
+        if (b.vz * Math.sign(b.z) < 0) b.vz *= -0.35
+      } else if (behind > GOAL.depth) {
+        b.x = s * (PITCH.halfL + GOAL.depth + r)
+        if (b.vx * s < 0) b.vx *= -0.35
+      } else {
+        b.y = roofY + r
+        if (b.vy < 0) b.vy *= -0.3
+      }
+      b.vx *= 0.85
+      b.vz *= 0.85
       ev.netTouch = true
-    }
-    const sideZ = GOAL.halfW + 0.55 - r
-    if (Math.abs(b.z) > sideZ) {
-      b.z = Math.sign(b.z) * sideZ
-      b.vz *= -0.2
-      ev.netTouch = true
-    }
-    if (b.y > GOAL.height + 0.5) {
-      b.y = GOAL.height + 0.5
-      b.vy = Math.min(b.vy, 0)
     }
   }
 
