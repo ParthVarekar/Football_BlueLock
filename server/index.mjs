@@ -241,6 +241,15 @@ wss.on('connection', (ws) => {
       if (typeof msg.name === 'string') self.name = clean(msg.name, 14) || self.name
       if (msg.team === 'A' || msg.team === 'B') self.team = msg.team
       broadcastRoster(me.code)
+    } else if (msg.t === 'teams') {
+      // atomic team assignment — only the room's host (oldest member) may send it
+      const host = rosterOf(room)[0]
+      if (!host || host.id !== me.id || !msg.teams || typeof msg.teams !== 'object') return
+      for (const [id, team] of Object.entries(msg.teams)) {
+        const m = room.get(id)
+        if (m && (team === 'A' || team === 'B')) m.team = team
+      }
+      broadcastRoster(me.code)
     } else if (msg.t === 'ping') {
       send(ws, { t: 'pong' })
     }

@@ -186,6 +186,11 @@ export class RelayNet implements NetClient {
     this.raw({ t: 'presence', name: partial.name, team: partial.team })
   }
 
+  /** Host only: set everyone's team in one step (the relay applies it atomically). */
+  setTeams(teams: Record<string, 'A' | 'B'>): void {
+    this.raw({ t: 'teams', teams })
+  }
+
   private onEnvelope(env: Envelope | null): void {
     if (!env || typeof env !== 'object' || !env.d || typeof env.d !== 'object') return
     const d = env.d as Record<string, unknown>

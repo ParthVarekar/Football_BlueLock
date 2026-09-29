@@ -795,13 +795,9 @@ export function createGame(opts: GameOptions): GameHandle {
         }
         prevHostId = newHost
 
-        const me = next.find((r) => r.id === myId)
-        if (me && prevIds.size > 0) {
-          const countA = next.filter((r) => r.team === 'A').length
-          const countB = next.filter((r) => r.team === 'B').length
-          if (me.team === 'A' && countA - countB > 1) net?.updatePresence({ team: 'B' })
-          else if (me.team === 'B' && countB - countA > 1) net?.updatePresence({ team: 'A' })
-        }
+        // teams are owned by the relay (balanced on join, set atomically by the
+        // host) — clients never re-balance themselves, which used to ping-pong
+        // players between sides forever after a shuffle
 
         for (const r of next) if (r.id !== myId) remote.setInfo(r.id, r.name, r.team)
         for (const id of remote.ids()) if (!nextIds.has(id)) remote.remove(id)
@@ -951,10 +947,10 @@ export function createGame(opts: GameOptions): GameHandle {
         break
       }
       case 'teams': {
+        // legacy event (older clients): apply locally only — the relay roster is the truth
         for (const [id, team] of Object.entries(msg.teams)) {
           const r = roster.find((e) => e.id === id)
           if (r) r.team = team
-          if (id === myId) net?.updatePresence({ team })
           const info = remote.getInfo(id)
           if (info) remote.setInfo(id, info.name, team)
         }
@@ -3419,18 +3415,14 @@ export function createGame(opts: GameOptions): GameHandle {
         ids.forEach((id, i) => {
           teams[id] = i % 2 === 0 ? 'A' : 'B'
         })
-        const msg: MatchEventMsg = { type: 'teams', teams }
-        net?.sendEvent(msg)
-        applyEvent(msg)
+        net?.setTeams(teams)
         break
       }
       case 'setTeam': {
         if (!isHost() || mode !== 'match') break
         const teams: Record<string, Team> = {}
         for (const r of roster) teams[r.id] = r.id === c.id ? c.team : r.team
-        const msg: MatchEventMsg = { type: 'teams', teams }
-        net?.sendEvent(msg)
-        applyEvent(msg)
+        net?.setTeams(teams)
         break
       }
       case 'rematch': {
