@@ -114,6 +114,8 @@ const nowSec = (): number => performance.now() / 1000
 const AI_ID = 'ai-defender'
 /** Seconds without a transform before a remote player is treated as gone. */
 const STALE_AFTER = 3
+/** Rough one-way client → relay → host delay (s), used to lead remote dribblers. */
+const NET_LEAD = 0.08
 const UP = new THREE.Vector3(0, 1, 0)
 
 interface RestartState {
@@ -233,6 +235,8 @@ export function createGame(opts: GameOptions): GameHandle {
 
   const localBall: BallState = { x: 0, y: BALL.r, z: 0, vx: 0, vy: 0, vz: 0, lastTouch: null }
   let hostBall: BallStateMsg | null = null
+  /** When the current hostBall report arrived (its age drives the forward projection). */
+  let hostBallAt = 0
   let myKickT = 0
   let mySeq = 0
   let ballSeq = 0
@@ -748,8 +752,12 @@ export function createGame(opts: GameOptions): GameHandle {
     if (!at) return
     const last = lastHostKick.get(msg.id) ?? -Infinity
     if (nowSec() - last < KICK.hostCooldown) return
+    // the kicker's pose we hold is ~0.1–0.2 s stale: allow for how far they
+    // could have run since, or fast players' shots were silently dropped
+    const vel = remote.latestVel(msg.id)
+    const lagSlack = vel ? Math.min(2, Math.hypot(vel.vx, vel.vz) * 0.25) : 0
     const dist = Math.hypot(localBall.x - at.x, localBall.z - at.z)
-    if (dist > KICK.hostRangeTolerance || localBall.y > 1.6) return
+    if (dist > KICK.hostRangeTolerance + lagSlack || localBall.y > 1.9) return
     const power = clamp(msg.power, 0, KICK.powerCap)
     const v = kickVelocity(power, clamp(msg.loftN, 0, 1), msg.dx, msg.dz)
     localBall.vx = v.vx
@@ -813,11 +821,17 @@ export function createGame(opts: GameOptions): GameHandle {
           const owner = timeStop ? timeStop.by : simT < tsGraceUntil ? tsGraceFrom : null
           if (msg.from !== owner) return
           if (isHost()) copyBall(localBall, msg)
-          else hostBall = msg
+          else {
+            hostBall = msg
+            hostBallAt = nowSec()
+          }
           return
         }
         if (isHost()) return
+        // batches can deliver an older ball after a newer one — keep the newest
+        if (hostBall && !hostBall.from && msg.seq < hostBall.seq && hostBall.seq - msg.seq < 1e6) return
         hostBall = msg
+        hostBallAt = nowSec()
         clock = meta.clock
         scoreA = meta.scoreA
         scoreB = meta.scoreB
@@ -984,13 +998,17 @@ export function createGame(opts: GameOptions): GameHandle {
           phase = 'lobby'
           restart = null
         } else {
+          // a RECONNECT after a network blip also triggers a snapshot — someone
+          // already playing this match keeps playing instead of being benched
+          const alreadyPlaying = screen === 'game' && !spectating
           screen = 'game'
           phase = msg.phase
           restart =
             msg.restart !== null && msg.phase === 'restart'
               ? { kind: msg.restart.kind, team: msg.restart.team, x: msg.restart.x, z: msg.restart.z, takerId: msg.restart.takerId, reason: msg.restart.reason }
               : null
-          spectating = msg.phase === 'play' || msg.phase === 'goal' || msg.phase === 'halftime' || msg.phase === 'restart'
+          spectating = !alreadyPlaying && (msg.phase === 'play' || msg.phase === 'goal' || msg.phase === 'halftime' || msg.phase === 'restart')
+          input.inputEnabled = !paused && !spectating && (msg.phase === 'play' || msg.phase === 'restart')
           if (spectating) {
             player.teleport(9, PITCH.wallW / 2 - 1.6)
             cameraRig.yaw = yawFromDir(-9, -20)
@@ -1004,6 +1022,7 @@ export function createGame(opts: GameOptions): GameHandle {
           localBall.vz = msg.ball.vz
           localBall.lastTouch = msg.ball.lastTouch
           hostBall = msg.ball
+          hostBallAt = nowSec()
         }
         syncRigs()
         break
@@ -1541,8 +1560,13 @@ export function createGame(opts: GameOptions): GameHandle {
             remoteDribblers.set(id, rec)
           }
           const v = remote.latestVel(id)
-          rec.x = p.x
-          rec.z = p.z
+          // lead the remote dribbler by the one-way network delay: their own
+          // screen is already ~0.1 s ahead of the pose we last heard, so the host's
+          // dribble magnet pulls the ball to where they ACTUALLY are (without this,
+          // non-host dribblers see the ball lag behind and snap back)
+          const lead = Math.min(0.14, remote.age(id, nowSec()) + NET_LEAD)
+          rec.x = p.x + (v?.vx ?? 0) * lead
+          rec.z = p.z + (v?.vz ?? 0) * lead
           rec.vx = v?.vx ?? 0
           rec.vz = v?.vz ?? 0
           rec.yaw = p.yaw
@@ -1593,23 +1617,29 @@ export function createGame(opts: GameOptions): GameHandle {
       if (myKickT > 0) myKickT -= dt
 
       if (hostBall) {
-        const err = Math.hypot(localBall.x - hostBall.x, localBall.y - hostBall.y, localBall.z - hostBall.z)
+        // The host's ball report is already ~0.1–0.2 s old when it lands. Blending
+        // toward that OLD position dragged the ball backwards every frame (the
+        // rubber-band). Project it forward by its age first — a short ballistic
+        // step — so corrections aim at where the host's ball is NOW.
+        const target = projectHostBall(hostBall, Math.min(0.25, nowSec() - hostBallAt))
+        const err = Math.hypot(localBall.x - target.x, localBall.y - target.y, localBall.z - target.z)
         const iAmDribbling =
           Math.hypot(localBall.x - player.x, localBall.z - player.z) < PLAYER.dribbleRadius && localBall.y < 0.7 && myKickT <= 0
         if (err > 4) {
-          copyBall(localBall, hostBall)
+          copyBall(localBall, target)
           if (player.juggling) stopJuggle(false)
         } else if (player.juggling || ballPinnedByAction()) {
           // kinematic ownership (juggle / skill pins) — corrections stand down;
           // the host's own dribble magnet keeps its ball near our feet
         } else if (iAmDribbling) {
-          blendBall(localBall, hostBall, 4.5, 5, dt)
+          // my feet own it: trust my prediction unless we've clearly diverged
+          if (err > 1.4) blendBall(localBall, target, 3, 3, dt)
         } else if (myKickT > 0) {
-          blendBall(localBall, hostBall, 6, 7, dt)
+          blendBall(localBall, target, 5, 6, dt)
         } else if (err > 2.5) {
-          copyBall(localBall, hostBall)
+          copyBall(localBall, target)
         } else {
-          blendBall(localBall, hostBall, 9, 9, dt)
+          blendBall(localBall, target, 7, 7, dt)
         }
       }
     }
@@ -2828,6 +2858,23 @@ export function createGame(opts: GameOptions): GameHandle {
     dst.vy = src.vy
     dst.vz = src.vz
     dst.lastTouch = src.lastTouch
+  }
+
+  /**
+   * Where a reported ball is `age` seconds later: run the real ball physics
+   * forward (no bodies), so rolling friction, bounces and walls all match.
+   */
+  const projScratch: BallState = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lastTouch: null }
+  const projOut: BallStateMsg = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, lastTouch: null, seq: 0, t: 0 }
+  function projectHostBall(src: BallStateMsg, age: number): BallStateMsg {
+    copyBall(projScratch, src)
+    const STEP = 1 / 60
+    for (let t = 0; t < age; t += STEP) stepBall(projScratch, Math.min(STEP, age - t), [])
+    Object.assign(projOut, projScratch)
+    projOut.seq = src.seq
+    projOut.t = src.t
+    projOut.from = src.from
+    return projOut
   }
 
   function blendBall(b: BallState, target: BallStateMsg, posL: number, velL: number, dt: number): void {

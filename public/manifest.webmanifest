@@ -1,0 +1,10 @@
+{
+  "name": "Football BlueLock — Gulmohar Ground",
+  "short_name": "BlueLock FC",
+  "description": "First-person gully football with EGO super moves.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#f2ddbe",
+  "theme_color": "#f2ddbe"
+}

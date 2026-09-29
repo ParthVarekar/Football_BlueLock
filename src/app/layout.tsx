@@ -7,6 +7,8 @@ export const metadata: Metadata = {
     "First-person gully football at golden hour. Grab up to nine friends, share a room code, and play 4v4 or 5v5 on a hand-painted Indian maidan.",
   keywords: ["football", "gully football", "multiplayer", "three.js", "first person", "browser game"],
   authors: [{ name: "Gulmohar Ground" }],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "BlueLock FC" },
 };
 
 export const viewport: Viewport = {

@@ -78,7 +78,8 @@ export const KICK = {
   pitchForLoft1: 0.52,
   /** Host anti-cheat: max accepted kick range and per-kicker cooldown. */
   hostRangeTolerance: 2.3,
-  hostCooldown: 0.3,
+  // short enough that a flair touch followed by a quick shot both land
+  hostCooldown: 0.18,
   powerCap: 1.05,
   /** Cosmetic follow-through duration. */
   followThrough: 0.32,

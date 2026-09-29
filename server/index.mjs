@@ -51,6 +51,7 @@ const TYPES = {
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
   '.map': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 }
 
 // ------------------------------------------------------------------ static files
@@ -210,11 +211,12 @@ wss.on('connection', (ws) => {
       room.set(id, entry)
       me = { code, id }
       send(ws, { t: 'joined', id })
-      // replay everyone's last pose so nobody is invisible until they next move
+      // roster FIRST (the client ignores poses from players it doesn't know yet),
+      // then everyone's last pose so nobody standing still is invisible
+      broadcastRoster(code)
       for (const m of room.values()) {
         if (m.id !== id && m.lastPos) send(ws, { t: 'm', d: m.lastPos })
       }
-      broadcastRoster(code)
       return
     }
 

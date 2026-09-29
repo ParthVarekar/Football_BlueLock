@@ -9,6 +9,7 @@ import type { GameHandle } from '../Game'
 import type { UiState } from '../core/types'
 import { MenuScreen, RoomScreen } from './Menu'
 import { Hud } from './Hud'
+import { enterFullscreen } from './fullscreen'
 
 const EMPTY: UiState = {
   screen: 'menu',
@@ -94,6 +95,18 @@ export default function GameMount() {
       handle?.dispose()
       setGame(null)
     }
+  }, [])
+
+  // phones: the first tap anywhere takes the game fullscreen + landscape, so
+  // the browser's address bar and toolbars stop eating the pitch
+  useEffect(() => {
+    const touch = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+    if (!touch) return
+    const go = (): void => {
+      void enterFullscreen(true)
+    }
+    window.addEventListener('pointerup', go, { once: true })
+    return () => window.removeEventListener('pointerup', go)
   }, [])
 
   const subscribe = game ? (fn: () => void) => game.subscribe(fn) : noopSubscribe

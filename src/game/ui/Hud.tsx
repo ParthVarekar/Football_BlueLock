@@ -3,7 +3,8 @@
 /** In-match HUD: score chip, banner, countdown, restart indicator, cooldown
  * pips, pause + victory overlays (with settings), touch controls. */
 import { useEffect, useState } from 'react'
-import { LogOut, Menu as MenuIcon, MousePointerClick, RotateCcw, Volume2, VolumeX, Wind } from 'lucide-react'
+import { LogOut, Maximize, Menu as MenuIcon, Minimize, MousePointerClick, RotateCcw, Volume2, VolumeX, Wind } from 'lucide-react'
+import { enterFullscreen, exitFullscreen, fullscreenSupported, isFullscreen } from './fullscreen'
 import type { GameHandle } from '../Game'
 import type { UiState } from '../core/types'
 import { TEAM_NAME } from '../core/types'
@@ -230,6 +231,16 @@ function SkillPips({ snap }: { snap: UiState }) {
 }
 
 export function Hud({ game, snap }: HudProps) {
+  const [fs, setFs] = useState(false)
+  useEffect(() => {
+    const on = (): void => setFs(isFullscreen())
+    document.addEventListener('fullscreenchange', on)
+    document.addEventListener('webkitfullscreenchange', on)
+    return () => {
+      document.removeEventListener('fullscreenchange', on)
+      document.removeEventListener('webkitfullscreenchange', on)
+    }
+  }, [])
   const [showClickHint, setShowClickHint] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   useEffect(() => {
@@ -251,6 +262,20 @@ export function Hud({ game, snap }: HudProps) {
 
       {/* top-right buttons */}
       <div className="pointer-events-auto absolute top-3 right-3 flex gap-2">
+        {fullscreenSupported() && (
+          <button
+            className="gg-btn gg-btn-ghost !min-h-11 !w-11 !p-0"
+            style={{ background: 'rgba(251,243,226,0.85)', border: '2px solid #2f2823', boxShadow: '0 2px 0 0 #2f2823' }}
+            onClick={() => {
+              if (isFullscreen()) void exitFullscreen()
+              else void enterFullscreen(snap.touchMode)
+            }}
+            title="Fullscreen"
+            aria-label="Toggle fullscreen"
+          >
+            {fs ? <Minimize size={19} /> : <Maximize size={19} />}
+          </button>
+        )}
         <button
           className="gg-btn gg-btn-ghost !min-h-11 !w-11 !p-0"
           style={{ background: 'rgba(251,243,226,0.85)', border: '2px solid #2f2823', boxShadow: '0 2px 0 0 #2f2823' }}
@@ -283,20 +308,19 @@ export function Hud({ game, snap }: HudProps) {
         </div>
       )}
 
-      {/* practice chip */}
-      {snap.practice && !snap.paused && !snap.victory && (
-        <div className="gg-chip absolute top-3 left-3 text-xs font-bold">
-          Practice · {snap.practiceGoals} goal{snap.practiceGoals === 1 ? '' : 's'}
-          <span className="ml-2 opacity-55">R resets the ball</span>
-        </div>
-      )}
-
-      {/* free play chip */}
-      {snap.freePlay && !snap.paused && !snap.victory && (
-        <div className="gg-chip absolute top-3 left-3 text-xs font-bold">
-          Just you & the ball
-          <span className="ml-2 opacity-55">R resets the ball</span>
-        </div>
+      {/* solo chip — on touch there's no R key, so tapping the chip resets the ball */}
+      {(snap.practice || snap.freePlay) && !snap.paused && !snap.victory && (
+        <button
+          className="gg-chip pointer-events-auto absolute top-3 left-3 flex items-center gap-2 text-xs font-bold"
+          onPointerDown={(e) => {
+            e.preventDefault()
+            if (snap.touchMode) game.cmd({ type: 'practiceReset' })
+          }}
+          aria-label="Reset the ball to your feet"
+        >
+          {snap.practice ? `Practice · ${snap.practiceGoals} goal${snap.practiceGoals === 1 ? '' : 's'}` : 'Just you & the ball'}
+          <span className="opacity-55">{snap.touchMode ? '↺ tap: ball to feet' : 'R resets the ball'}</span>
+        </button>
       )}
 
       {/* restart chip — who takes it */}
