@@ -284,9 +284,11 @@ export const STAMINA = {
 } as const
 
 export const NET = {
-  playerHz: 20,
+  // matched to the relay's 15 Hz batching tick
+  playerHz: 15,
   ballHz: 15,
-  interpDelay: 0.12, // remote player interpolation buffer
+  // two server ticks of buffer so batched arrivals interpolate smoothly
+  interpDelay: 0.16, // remote player interpolation buffer
   maxPlayers: 10,
   codeChars: 'ABCDEFGHJKMNPQRSTUVWXYZ23456789',
 } as const

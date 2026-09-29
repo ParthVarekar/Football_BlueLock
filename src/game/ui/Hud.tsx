@@ -348,7 +348,8 @@ export function Hud({ game, snap }: HudProps) {
       )}
 
       {/* EGO gauge */}
-      {!snap.paused && !snap.victory && snap.phase === 'play' && !snap.spectating && <EgoGauge game={game} snap={snap} />}
+      {/* touch has its own compact EGO button + tray in TouchControls */}
+      {!snap.paused && !snap.victory && snap.phase === 'play' && !snap.spectating && !snap.touchMode && <EgoGauge game={game} snap={snap} />}
 
       {/* skill cooldown pips */}
       {!snap.paused && !snap.victory && snap.phase === 'play' && <SkillPips snap={snap} />}

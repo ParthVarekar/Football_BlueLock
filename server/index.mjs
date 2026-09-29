@@ -31,6 +31,13 @@ import { WebSocketServer } from 'ws'
 const PORT = Number(process.env.PORT || 3001)
 const MAX_PLAYERS = 10
 const HEARTBEAT_MS = 5000
+/**
+ * Batching tick. Instead of forwarding every message to every player (N×N
+ * socket writes — ~1,900/s at 10 players, which chokes a small free server),
+ * each tick sends ONE packet per player holding everything new: the latest
+ * pose of each other player, the latest ball, and every event/kick in order.
+ */
+const TICK_MS = 66
 const ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', 'out')
 
 const TYPES = {
@@ -140,7 +147,10 @@ wss.on('connection', (ws) => {
     // only remove if this socket still owns the entry (a reconnect may have replaced it)
     if (room && entry && entry.ws === ws) {
       room.delete(me.id)
-      if (room.size === 0) rooms.delete(me.code)
+      if (room.size === 0) {
+        rooms.delete(me.code)
+        queues.delete(me.code)
+      }
       else broadcastRoster(me.code)
     }
     me = null
@@ -215,10 +225,17 @@ wss.on('connection', (ws) => {
 
     if (msg.t === 'm') {
       const d = msg.d
-      if (d && typeof d === 'object' && d.k === 'pos') self.lastPos = d
-      const out = JSON.stringify({ t: 'm', d })
-      for (const m of room.values()) {
-        if (m.ws !== ws && m.ws.readyState === 1) m.ws.send(out)
+      if (!d || typeof d !== 'object') return
+      const q = queueOf(me.code)
+      const str = JSON.stringify(d)
+      if (d.k === 'pos') {
+        // only the newest pose matters — older ones in the same tick are dropped
+        self.lastPos = d
+        q.pos.set(me.id, str)
+      } else if (d.k === 'ball') {
+        q.ball = { from: me.id, str }
+      } else {
+        q.ordered.push({ from: me.id, str })
       }
     } else if (msg.t === 'presence') {
       if (typeof msg.name === 'string') self.name = clean(msg.name, 14) || self.name
@@ -232,6 +249,43 @@ wss.on('connection', (ws) => {
   ws.on('close', leave)
   ws.on('error', leave)
 })
+
+// ------------------------------------------------------------------ batching
+/** @type {Map<string, {pos: Map<string, string>, ball: {from: string, str: string} | null, ordered: Array<{from: string, str: string}>}>} */
+const queues = new Map()
+
+function queueOf(code) {
+  let q = queues.get(code)
+  if (!q) {
+    q = { pos: new Map(), ball: null, ordered: [] }
+    queues.set(code, q)
+  }
+  return q
+}
+
+setInterval(() => {
+  for (const [code, q] of queues) {
+    const room = rooms.get(code)
+    if (!room) {
+      queues.delete(code)
+      continue
+    }
+    if (q.pos.size === 0 && !q.ball && q.ordered.length === 0) continue
+    for (const m of room.values()) {
+      if (m.ws.readyState !== 1) continue
+      const parts = []
+      for (const item of q.ordered) if (item.from !== m.id) parts.push(item.str)
+      if (q.ball && q.ball.from !== m.id) parts.push(q.ball.str)
+      for (const [from, str] of q.pos) if (from !== m.id) parts.push(str)
+      if (parts.length === 0) continue
+      // envelopes are already JSON — splice them in without re-encoding
+      m.ws.send(`{"t":"b","m":[${parts.join(',')}]}`)
+    }
+    q.pos.clear()
+    q.ball = null
+    q.ordered.length = 0
+  }
+}, TICK_MS)
 
 // dead-connection sweep: anything silent for two heartbeats is dropped
 setInterval(() => {

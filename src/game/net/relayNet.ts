@@ -135,6 +135,10 @@ export class RelayNet implements NetClient {
         case 'm':
           this.onEnvelope(msg.d as Envelope)
           break
+        case 'b':
+          // one batched packet per server tick: events/kicks (in order), ball, poses
+          for (const env of (msg.m as Envelope[] | undefined) ?? []) this.onEnvelope(env)
+          break
       }
     }
     ws.onclose = () => {

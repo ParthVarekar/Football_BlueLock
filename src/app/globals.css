@@ -458,3 +458,8 @@ body {
   background: rgba(242, 138, 46, 0.55);
   transition: height 0.12s linear;
 }
+
+/* phones held upright: nudge toward landscape */
+@media (orientation: portrait) and (max-width: 700px) {
+  .gg-rotate-hint { display: flex; }
+}
