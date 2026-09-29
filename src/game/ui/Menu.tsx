@@ -143,6 +143,13 @@ export function SettingsBlock({ game, snap }: ScreenProps) {
   )
 }
 
+/** True when the game is served from a local-network address (a lan.bat host). */
+function isLanHost(): boolean {
+  if (typeof window === 'undefined') return false
+  const h = window.location.hostname
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || h.endsWith('.local')
+}
+
 /** Offline note shown instead of the removed key form — env-only config. */
 function EnvOnlyNote() {
   return (
@@ -374,12 +381,34 @@ export function RoomScreen({ game, snap }: ScreenProps) {
     snap.roster.some((r) => r.team === 'B')
 
   const copy = async (): Promise<void> => {
+    // on a LAN address (http, not https) navigator.clipboard doesn't exist —
+    // fall back to the old selection copy so the button still works
+    let ok = false
     try {
-      await navigator.clipboard.writeText(snap.roomCode)
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(snap.roomCode)
+        ok = true
+      }
+    } catch {
+      /* fall through */
+    }
+    if (!ok) {
+      const ta = document.createElement('textarea')
+      ta.value = snap.roomCode
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        ok = document.execCommand('copy')
+      } catch {
+        ok = false
+      }
+      ta.remove()
+    }
+    if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      /* clipboard unavailable */
     }
   }
 
@@ -401,6 +430,14 @@ export function RoomScreen({ game, snap }: ScreenProps) {
           {snap.connected ? 'connected' : 'connecting…'}
           <span className="opacity-40">·</span>
           <Users size={13} /> {snap.roster.length}/10 players
+          {isLanHost() && (
+            <span
+              className="ml-1 rounded-md border-2 border-[#2f2823] bg-[#2fa8a0] px-1.5 text-[10px] font-extrabold tracking-widest text-[#fbf3e2]"
+              title="Playing on a local-network server — traffic stays inside your Wi-Fi"
+            >
+              LAN
+            </span>
+          )}
         </div>
 
         <div className="mt-4 flex gap-3">
@@ -456,6 +493,8 @@ export function RoomScreen({ game, snap }: ScreenProps) {
           <b>C</b> slide tackles (miss the ball and it&apos;s a foul — penalties included), <b>Shift</b> sprints.
           Flair: <b>E</b> rainbow over your head, <b>Z</b>+LMB rabona, <b>X</b> roulette spin, <b>V</b> elastico,{' '}
           <b>G</b> Cruyff turn, <b>B</b> backheel, <b>T</b> juggle (kick mid-bounce for a volley).
+          Playing together in the same place? Run <b>lan.bat</b> on one PC and everyone on that Wi-Fi opens the
+          address it prints — smoother than online.{' '}
           EGO supers on <b>1–6</b> once your gauge fills: dragon shot, mountain wall, eagle talon, thunder
           seal, zero hour, cyclone.
           Throw-ins, corners, goal kicks, offside — the real rules. First to 5, or most goals after two 3-minute

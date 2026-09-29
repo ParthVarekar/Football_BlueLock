@@ -71,6 +71,19 @@ for itself whether it was caught. The ball stays host-authoritative except
 during the dragon's flight (a deterministic curve every client follows) and
 Zero Hour (the caster owns the ball while time stands still).
 
+## LAN play (same Wi-Fi — the smoothest way)
+
+Playing in the same place? Host on one PC and nothing leaves your router:
+
+1. On the host PC double-click **`lan.bat`** (first run installs + builds, ~1–2 min).
+2. If Windows Firewall asks, click **Allow access** for *private* networks.
+3. The window prints the address, e.g. `http://192.168.1.13:5757 (Wi-Fi)`.
+   Everyone on the same Wi-Fi — laptops and phones — opens that address.
+4. Create a room and share the code as usual. Keep the `lan.bat` window open.
+
+The room screen shows a **LAN** badge when you're on a local server. After
+pulling new code, run `lan.bat rebuild` once to rebuild the game.
+
 ## Hosting online
 
 `render.yaml` is a [Render](https://render.com) blueprint for one Node web

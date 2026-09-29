@@ -42,6 +42,17 @@ export function isNetConfigured(): boolean {
   return typeof window !== 'undefined'
 }
 
+/**
+ * Random player id. NOT crypto.randomUUID(): that only exists in secure
+ * contexts (https / localhost), so on a LAN address like http://192.168.1.13
+ * it's undefined and joining a room crashed. getRandomValues works everywhere.
+ */
+function makeId(): string {
+  const b = new Uint8Array(16)
+  crypto.getRandomValues(b)
+  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+}
+
 /** Round to 3 decimals: mm precision, a much smaller packet. */
 const r3 = (v: number): number => Math.round(v * 1000) / 1000
 
@@ -61,7 +72,7 @@ export class RelayNet implements NetClient {
 
   constructor(handlers: NetHandlers) {
     this.handlers = handlers
-    this.myId = crypto.randomUUID()
+    this.myId = makeId()
   }
 
   connect(code: string, me: PresencePayload): Promise<void> {

@@ -26,6 +26,7 @@ import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { networkInterfaces } from 'node:os'
 import { WebSocketServer } from 'ws'
 
 const PORT = Number(process.env.PORT || 3001)
@@ -314,6 +315,40 @@ setInterval(() => {
   }
 }, HEARTBEAT_MS)
 
-server.listen(PORT, () => {
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`\n[!] Port ${PORT} is already used by another program. Close it, or run with a different PORT.\n`)
+    process.exit(1)
+  }
+  throw e
+})
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Gulmohar Ground relay on :${PORT} (static from ${ROOT})`)
+  if (process.env.LAN) {
+    // LAN host: print every address friends on the same Wi-Fi can open
+    // real Wi-Fi / Ethernet first; virtual adapters (WSL, Hyper-V, VMs, VPNs) last
+    const virtual = /vEthernet|WSL|Hyper-V|VirtualBox|VMware|Loopback|Docker|TAP|Tailscale|ZeroTier|Npcap/i
+    const real = []
+    const other = []
+    for (const [name, list] of Object.entries(networkInterfaces())) {
+      for (const a of list ?? []) {
+        if (a.family !== 'IPv4' || a.internal) continue
+        ;(virtual.test(name) ? other : real).push({ name, address: a.address })
+      }
+    }
+    console.log('')
+    console.log('  ===============================================')
+    console.log('   LAN GAME IS UP. Friends on the same Wi-Fi open:')
+    for (const a of real) console.log(`     http://${a.address}:${PORT}    (${a.name})`)
+    if (other.length > 0) {
+      console.log('   (virtual adapters — only if the above fails:')
+      for (const a of other) console.log(`     http://${a.address}:${PORT}    (${a.name})`)
+      console.log('   )')
+    }
+    console.log('   (you can use http://localhost:' + PORT + ')')
+    console.log('   Keep this window open while you play.')
+    console.log('  ===============================================')
+    console.log('')
+  }
 })
